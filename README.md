@@ -82,13 +82,55 @@ Until Oct. 22th 2024.
 
 ## 3. Source/Grey-box Fuzzing
 
+**Human-in-the-loop:**
+
 - [Exploring Deep State Spaces via Fuzzing](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9152719)
   - Notes: [./PaperReading/IJON(S&P'20).md](./PaperReading/IJON(S&P'20).md)
-- 
+- [The Human Side of Fuzzing: Challenges Faced by Developers during Fuzzing Activities | ACM Transactions on Software Engineering and Methodology](https://dl.acm.org/doi/10.1145/3611668)
+  - 
+
 
 
 
 ## 4. Fuzzing with Large Language Model (LLM)
 
-- [Large Language Model guided Protocol Fuzzing](https://www.ndss-symposium.org/wp-content/uploads/2024-556-paper.pdf)
+Current LLM-based coverage-based fuzzing methods:
 
+| Paper           | Harness/Driver Generation | Input Generation | Seed Scheduling/Mutation | Bug Triage |
+| --------------- | ------------------------- | ---------------- | ------------------------ | ---------- |
+| CHATAFL[1]      | ×                         | √                | √                        | ×          |
+| Fuzz4ALL[2]     | ×                         | √                | √                        | ×          |
+| PromptFuzz[3]   | √                         | ×                | ×                        | ×          |
+| CovRL-Fuzz[4]   | ×                         | √                | √                        | ×          |
+| mGPTFuzz[5]     | ×                         | √                | ×                        | ×          |
+| [6]             | √                         | ×                | ×                        | ×          |
+| LLMIF[7]        | ×                         | √                | √                        | ×          |
+| ProphertFuzz[8] | ×                         | √                | ×                        | ×          |
+
+
+
+[1] NDSS'24 Protocol fuzzing: [Large Language Model guided Protocol Fuzzing](https://www.ndss-symposium.org/wp-content/uploads/2024-556-paper.pdf)
+
+- Notes: [mp.weixin.qq.com/s/rm4feDsQSSgRoeiOnToPnQ](https://mp.weixin.qq.com/s/rm4feDsQSSgRoeiOnToPnQ)
+
+[2] ICSE'24 Fuzz4ALL: [Fuzz4All: Universal Fuzzing with Large Language Models | Proceedings of the IEEE/ACM 46th International Conference on Software Engineering](https://dl.acm.org/doi/10.1145/3597503.3639121)
+
+[3] PromptFuzz: [[2409.14729\] PROMPTFUZZ: Harnessing Fuzzing Techniques for Robust Testing of Prompt Injection in LLMs](https://arxiv.org/abs/2409.14729)
+
+[4] ISSTA'24 CovRL-Fuzz: https://dl.acm.org/doi/abs/10.1145/3650212.3680389
+
+[5] Securfity'24 mGPTFuzz: [From One Thousand Pages of Specification to Unveiling Hidden Bugs: Large Language Model Assisted Fuzzing of Matter IoT Devices | USENIX](https://www.usenix.org/conference/usenixsecurity24/presentation/ma-xiaoyue)
+
+[6] ISSTA'24 [How Effective Are They? Exploring Large Language Model Based Fuzz Driver Generation | Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis](https://dl.acm.org/doi/abs/10.1145/3650212.3680355)
+
+[7] S&P'24 LLMIF [CSDL | IEEE Computer Society](https://www.computer.org/csdl/proceedings-article/sp/2024/313000a196/1WPcYnhN15u)
+
+[8] ProphertFuzz :[ProphetFuzz: Fully Automated Prediction and Fuzzing of High-Risk Option Combinations with Only Documentation via Large Language Model](https://arxiv.org/pdf/2409.00922)
+
+
+
+## 5. Tech problems
+
+1. How to get cov from AFL?
+
+[./TechProblems/Get coverage from AFL.md](./TechProblems/Get coverage from AFL.md)

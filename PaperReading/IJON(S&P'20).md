@@ -72,7 +72,7 @@
 
 
 
-**IJON实现方式：**
+**IJON Implementations：**
 
 fuzzing process 1--> 人工分析 --> fixed fuzzing process 2 --> get new coverage input --> feed back to process 1
 
@@ -104,4 +104,250 @@ fuzzing process 1--> 人工分析 --> fixed fuzzing process 2 --> get new covera
 
 
 
+**Adding Annotations**
+
+AFL自带的compiler pass可以实现code coverage的获取。**作者扩展并修改了这些pass，和编译器warper，并提供了一个额外的runtime library用于给编译器静态链接使用。** 这个runtime library实现了很多helper functions和macros用于添加annotation。
+
+`IJON-ENABLE`: 引入一个mask用于改变coverage的计算方式，mask为0表示只有bitmap的第一个enrty可以被访问和修改；为0xffff则表示所有都可以。
+
+`IJON-INC` and `IJON-SET`：对于IJON-INC(n)来说，bitmap中第n个entry被增加；对于IJON-SET(n)来说，bitmap中第n个entry被设置为1。
+
+`IJON-STATE`：这个函数直接改变了全局coverage的计算方式，其会将一个state n加入bitmap的计算中 （state⊕(ids ∗2)⊕idt），重复调用IJON_STATE(n)时，state以这种方式累加：state := state ⊕ n。
+
+`IJON-MAX`：这个函数用于实现将某些值最大化的要求（例如超级玛丽中的x轴），其最高支持512个slot，每个slot都会单独尽力达到最大值。为了存储这些值，作者实现了一个额外的max-map，调用IJON_MAX(slot,val)时，会做操作：maxmap[slot]=max(maxmap[slot], val)。
+
+在运行一次后，fuzzer会同时检查bitmap和maxmap以确定是否产生新的coverage。
+
+
+
+**New code in rep**
+
+作者在最新的仓库中更新了相关API：
+
+```c
+void ijon_map_inc(uint32_t addr){ 
+  __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]+=1;
+}
+
+void ijon_map_set(uint32_t addr){ 
+  __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]|=1;
+}
+```
+
+共享内存的地址在初始化后存储在指针：`__afl_area_ptr`。这里就是直接设置对应bitmap的值。
+
+```C
+void ijon_xor_state(uint32_t val){
+  __afl_state = (__afl_state^val)%MAP_SIZE; //state := state ⊕ val
+}
+```
+`ijon_push_state`用于应对例如listing 7的情况：
+
+```c
+void ijon_push_state(uint32_t x){
+  ijon_xor_state(__afl_state_log);
+  __afl_state_log = (__afl_state_log << 8) | (x & 0xff);
+  ijon_xor_state(__afl_state_log);
+}
+```
+
+`ijon_strdist`用于计算两个字符串最大公共前缀长度：
+
+```c
+uint32_t ijon_strdist(char* a,char* b){
+  int i = 0;
+  while(*a && *b && *a++==*b++){
+    i++;
+  }
+  return i;
+}
+```
+
+`ijon_memdist`相较于`ijon_strdist`指定了函数：
+
+```c
+uint32_t ijon_memdist(char* a,char* b, size_t len){
+  int i = 0;
+  while(i < len && *a++==*b++){
+    i++;
+  }
+  return i;
+}
+```
+
+`ijon_enable_feedback`/`ijon_disable_feedback`通过指定`__afl_mask`变量改变bitmap的计算方式：
+
+```c
+void ijon_enable_feedback(){
+	__afl_mask = 0xffffffff;
+}
+void ijon_disable_feedback(){
+	__afl_mask = 0x0;
+}
+```
+
+`__afl_mask`具体在apply_mask中使用(afl-tmin.c)，计算bitmap中的每个byte，并进行masking操作：
+
+```c
+static void apply_mask(u32* mem, u32* mask) {
+  u32 i = (MAP_SIZE >> 2);
+  if (!mask) return;
+  while (i--) {
+    *mem &= ~*mask;
+    mem++;
+    mask++;
+  }
+}
+```
+
+`ijon_simple_hash`是一个简单快速hash方法：
+
+```c
+uint64_t ijon_simple_hash(uint64_t x) {
+    x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+    x = x ^ (x >> 31);
+    return x;
+}
+```
+
+`ijon_max`/`ijon_max`，`__afl_max_ptr`是其单独维护的maxmap：
+
+```c
+void ijon_max(uint32_t addr, uint64_t val){
+  if(__afl_max_ptr[addr%MAXMAP_SIZE] < val) {
+    __afl_max_ptr[addr%MAXMAP_SIZE] = val;
+  }
+}
+
+void ijon_min(uint32_t addr, uint64_t val){
+  val = 0xffffffffffffffff-val;
+  ijon_max(addr, val);
+}
+```
+
+`ijon_hashstack`分为两种情况，其都是将backtrace计算hash并异或：
+
+i386:
+
+```c
+#ifdef __i386__
+//WHY IS STACKUNWINDING NOT WORKING IN CGC BINARIES?
+uint32_t ijon_hashstack_manual(){
+	uint32_t *ebp=0;
+	uint64_t res = 0;
+	asm("\t movl %%ebp,%0" : "=r"(ebp));
+	for(int i=0; i<16 && ebp; i++){
+		//printf("ebp: %p\n", ebp);
+		printf("ret: %x\n", ebp[1]);
+		res ^= ijon_simple_hash((uint64_t)ebp[1]);
+		ebp = (uint32_t*)ebp[0];
+	}
+ printf(">>>> Final Stackhash: %lx\n",res);
+	return (uint32_t)res;
+}
+#endif
+```
+
+else:
+
+```c
+uint32_t ijon_hashstack_libgcc(){
+ void* buffer[16] = {0,};
+ int num = backtrace (buffer, 16);
+ assert(num<16);
+ uint64_t res = 0;
+ for(int i =0; i < num; i++) {
+	 printf("stack_frame %p\n", buffer[i]);
+	 res ^= ijon_simple_hash((uint64_t)buffer[i]);
+ }
+ printf(">>>> Final Stackhash: %lx\n",res);
+ return (uint32_t)res;
+}
+```
+
+接着作者定义了一些宏：
+
+```c
+# 连接x与y字符串
+#define _IJON_CONCAT(x, y) x##y
+
+# 生成唯一变量名：temp+lineNumber
+#define _IJON_UNIQ_NAME() IJON_CONCAT(temp,__LINE__)
+
+# 计算x-y绝对值
+#define _IJON_ABS_DIST(x,y) ((x)<(y) ? (y)-(x) : (x)-(y))
+```
+
+```c
+# 如果 x 为 0，返回 0，否则返回 x 的高位零的数量
+#define IJON_BITS(x) ((x==0)?{0}:__builtin_clz(x))
+
+# 与论文定义一致
+#define IJON_INC(x) ijon_map_inc(ijon_hashstr(__LINE__,__FILE__)^(x))
+#define IJON_SET(x) ijon_map_set(ijon_hashstr(__LINE__,__FILE__)^(x))
+```
+
+
+
+```C
+# 更新当前state
+#define IJON_CTX(x) ({ uint32_t hash = hashstr(__LINE__,__FILE__); ijon_xor_state(hash); __typeof__(x) IJON_UNIQ_NAME() = (x); ijon_xor_state(hash); IJON_UNIQ_NAME(); })
+
+#define IJON_MAX(x) ijon_max(ijon_hashstr(__LINE__,__FILE__),(x))
+#define IJON_MIN(x) ijon_max(ijon_hashstr(__LINE__,__FILE__),0xffffffffffffffff-(x))
+
+# __builtin_popcount用于计算bit中1的数量
+# 即统计x和y有几个bit不同
+#define IJON_CMP(x,y) IJON_INC(__builtin_popcount((x)^(y)))
+
+# 数值相等判断
+# 最小化X与Y的距离
+#define IJON_DIST(x,y) ijon_min(ijon_hashstr(__LINE__,__FILE__), _IJON_ABS_DIST(x,y))
+
+# 字符串相等判断
+# 计算字符串x和y的公共前缀长度后与当前调用堆栈hash，并更新到bitmap中
+#define IJON_STRDIST(x,y) IJON_SET(ijon_hashint(ijon_hashstack(), ijon_strdist(x,y)))
+```
+
+
+
 ## 3. Evaluation
+
+##### 3.1 Maze
+
+原本的版本中除了正确的移动都会立即终止游戏，作者实现了一个比较困难的迷宫，玩家可以往回走或者原地不动（撞墙）。这使得游戏的状态空间几何倍数增长，传统的符号执行例如KLEE没法很好解决了。
+
+作者简单的加入了一行annotation：
+
+<img src="../Figures/image-20241025161719184.png" alt="image-20241025161719184" style="zoom: 67%;" />
+
+并与AFL，AFLFAST，LAF-INTEL，QSYM，ANGORA对比：
+
+<img src="../Figures/image-20241025155418819.png" style="zoom:67%;" />
+
+表1作者在Easy(相对容易的原始迷宫)和Hard(作者实现的可以往回走的迷宫)测试了3次，给出了所有fuzzer和符号执行工具KLEE的结果，可以看到有了IJON的支持fuzzer的效果提升很大。
+
+表2表明了解决迷宫的平均时间。
+
+##### 3.2 Super Mario Bros.
+
+作者设定，马里奥只能往右走，并且停下来就死。
+
+作者用了`ijon_max` annotation （listing 9）。
+
+<img src="../Figures/image-20241025162818094.png" style="zoom: 67%;" />
+
+##### 3.3 Structured Input Formats
+
+
+
+## 4. AFL bitmap & shared memory
+
+文中指“an entry of bitmap”指的是Bitmap中的一个byte，其值代表了hit count.
+
+
+
+>[AFL源码阅读（二）：Main Payload 汇编](https://www.ruanx.net/afl-source-2/)
+>
+>[afl/docs/technical_details.txt at master · mirrorer/afl](https://github.com/mirrorer/afl/blob/master/docs/technical_details.txt)
