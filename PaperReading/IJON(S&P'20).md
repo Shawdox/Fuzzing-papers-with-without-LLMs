@@ -342,6 +342,43 @@ uint32_t ijon_hashstack_libgcc(){
 
 
 
+##### 3.4 HashMap
+
+下图是上文给出的一个HashMap的例子，由于其中间的for循环是一个一对多字符串匹配（每个lp->string == str），并附带上了`lp->hash == hash`的条件判断，直接根据覆盖率生成输入很难匹配这么多复杂的逻辑。
+
+<img src="D:/HEXO/My_Blog/My_Blog/source/figures/image-20241024120037718-17301977369881.png" style="zoom: 67%;" />
+
+1. 不同于简单的Maze，没有显示的变量指导状态的变化；
+2. 不同于消息处理，这里也没有很明显的让人感兴趣的代码位置，因为lp，tbl这些东西的意义都不明确；
+
+故像之前那样显示的指定变量或者利用log给出间接变量都不行，作者在代码中定义了以下函数：
+
+<img src="../Figures/image-20241029183849677.png" style="zoom:67%;" />
+
+文中没有给出`bfd_hash_traverse`的具体定义，这里解释为把一对多比较拆分成了一个个一对一比较。
+
+
+
+##### 3.5 Cyber Grand Challenge
+
+作者在DARPA CGC数据集的Linux端口上进行了实验。作者选择了30个CGC目标的随机子集。对于其中的八个目标，即使用提供的PoV也不会导致崩溃。作者手动检查了剩下的22个挑战，并使用AFL和IJON进行了fuzz，设法在10个目标中产生了崩溃，结果显示在表VII中。
+
+<img src="../Figures/image-20241029184914799.png" style="zoom:67%;" />
+
+其中两个目标包含的崩溃过于复杂而无法发现（需要触发一系列不同的错误才能导致可观察到的崩溃）。尽管可以设计出触发这些崩溃的IJON注释，但作者认为如果没有对bug的事先了解难以做到这一点。因此将这两个目标视为失败。在其余的7个目标中，有2个在作者的覆盖跟踪程序中几乎所有输入崩溃，其中3个需要非常大的输入，而AFL无法有效生成这些输入，另外2个运行非常缓慢，或者导致除少数输入之外的所有输入都超时。
+
+
+
+##### 3.6 Real-world 
+
+除了在状态日志实验中发现的内存损坏以及在CGC数据集中发现的新颖崩溃之外，作者还对其他软件进行了实验，以进一步证明IJON对于发现安全性漏洞有帮助。 特别是，我们选择了`dmg2img`，这个工具最近被WEIZZ的作者fuzz过。
+
+作者为发现的漏洞应用了补丁，并继续使用IJON进行fuzz，结果在dmg2img中发现了另外三个内存损坏漏洞，其中两个是WEIZZ发现的错误的变体，需要满足其他约束条件才能实现的危险字符串操作函数的不安全使用。 第三个bug是整数溢出，导致allocation的参数为0，将偏移量减一的字节设置为零，从而破坏了malloc元数据，如list-12所示。
+
+<img src="D:/HEXO/My_Blog/My_Blog/source/figures/image-20241029185056440.png" style="zoom:67%;" />
+
+
+
 ## 4. AFL bitmap & shared memory
 
 文中指“an entry of bitmap”指的是Bitmap中的一个byte，其值代表了hit count.

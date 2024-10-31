@@ -82,12 +82,17 @@ Until Oct. 22th 2024.
 
 ## 3. Source/Grey-box Fuzzing
 
-**Human-in-the-loop:**
+##### **Human-in-the-loop/More than code coverage:**
 
-- [Exploring Deep State Spaces via Fuzzing](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9152719)
+- Human in the loop: [S&P'20: Exploring Deep State Spaces via Fuzzing](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9152719)
   - Notes: [./PaperReading/IJON(S&P'20).md](./PaperReading/IJON(S&P'20).md)
-- [The Human Side of Fuzzing: Challenges Faced by Developers during Fuzzing Activities | ACM Transactions on Software Engineering and Methodology](https://dl.acm.org/doi/10.1145/3611668)
-  - 
+- Survey for challenges of human fuzzing practitioner: [The Human Side of Fuzzing: Challenges Faced by Developers during Fuzzing Activities | ACM Transactions on Software Engineering and Methodology](https://dl.acm.org/doi/10.1145/3611668)
+- Coverage for data access: [Security'24: Data Coverage for Guided Fuzzing](https://www.usenix.org/system/files/usenixsecurity24-wang-mingzhe.pdf)
+  - Notes: [./PaperReading/Data coverage(Security'24).md](./PaperReading/Data coverage(Security'24).md)
+
+- Follow existing bug/vuln report: [Security'24_sdfuzz.pdf](https://peng-hui.github.io/data/paper/sec24_sdfuzz.pdf)
+- Exclude irrelevant code with control and data flow anlysis: [S&P'23 SelectFuzz: Efficient Directed Fuzzing with Selective Path Exploration | IEEE Conference Publication | IEEE Xplore](https://ieeexplore.ieee.org/abstract/document/10179296)
+- Multi targets fuzzing: [S&P'24 IEEE Xplore Full-Text PDF:](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10646769)
 
 
 
@@ -134,3 +139,8 @@ Current LLM-based coverage-based fuzzing methods:
 1. How to get cov from AFL?
 
 [./TechProblems/Get coverage from AFL.md](./TechProblems/Get coverage from AFL.md)
+
+```c
+-fprofile-arcs -ftest-coverage
+```
+
